@@ -3,7 +3,7 @@ import os
 import progressbar
 
 paths = ["validation", "test", "train"]
-newSize = (512, 512)
+newSize = (299, 299)
 
 for path in paths:
     dirs = os.listdir(path)
