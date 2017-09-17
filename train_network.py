@@ -1,31 +1,12 @@
-from keras.models import Sequential
-from keras.layers import Conv2D, MaxPooling2D
-from keras.layers import Activation, Dropout, Flatten, Dense
+from keras.applications.inception_v3 import InceptionV3
+from keras.models import Model
+from keras.layers import Dense, GlobalAveragePooling2D
+from keras.optimizers import SGD
+from keras.preprocessing.image import ImageDataGenerator
 
-model = Sequential()
-model.add(Conv2D(32, (3, 3), input_shape=(3, 512, 512)))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-
-model.add(Conv2D(32, (3, 3)))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-
-model.add(Conv2D(64, (3, 3)))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-
-# the model so far outputs 3D feature maps (height, width, features)
-model.add(Flatten())  # this converts our 3D feature maps to 1D feature vectors
-model.add(Dense(64))
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
-model.add(Dense(1))
-model.add(Activation('sigmoid'))
-
-model.compile(
-    loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
 batch_size = 16
+numTrainImgs = 2000
+numValidationImgs = 150
 
 # this is the augmentation configuration we will use for training
 train_datagen = ImageDataGenerator(
@@ -40,7 +21,7 @@ test_datagen = ImageDataGenerator(rescale=1. / 255)
 # batches of augmented image data
 train_generator = train_datagen.flow_from_directory(
     'train_resized',  # this is the target directory
-    target_size=(512, 512),  # all images will be resized to 150x150
+    target_size=(299, 299),  # all images will be resized to 150x150
     batch_size=batch_size,
     class_mode='binary'
 )  # since we use binary_crossentropy loss, we need binary labels
@@ -48,16 +29,72 @@ train_generator = train_datagen.flow_from_directory(
 # this is a similar generator, for validation data
 validation_generator = test_datagen.flow_from_directory(
     'validation_resized',
-    target_size=(512, 512),
+    target_size=(299, 299),
     batch_size=batch_size,
     class_mode='binary')
 
+# create the base pre-trained model
+base_model = InceptionV3(weights='imagenet', include_top=False)
+
+# add a global spatial average pooling layer
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+# let's add a fully-connected layer
+x = Dense(1024, activation='relu')(x)
+# and a logistic layer -- let's say we have 2 classes
+predictions = Dense(1, activation='softmax')(x)
+
+# this is the model we will train
+model = Model(inputs=base_model.input, outputs=predictions)
+
+# first: train only the top layers (which were randomly initialized)
+# i.e. freeze all convolutional InceptionV3 layers
+for layer in base_model.layers:
+    layer.trainable = False
+
+# compile the model (should be done *after* setting layers to non-trainable)
+model.compile(optimizer='rmsprop', loss='binary_crossentropy')
+
+# train the model on the new data for a few epochs
 model.fit_generator(
     train_generator,
-    steps_per_epoch=2000 // batch_size,
+    steps_per_epoch=numTrainImgs // batch_size,
     epochs=50,
     validation_data=validation_generator,
-    validation_steps=800 // batch_size)
+    validation_steps=numValidationImgs // batch_size)
 model.save_weights(
-    'first_try.h5'
+    'trained_top_layers.h5'
 )  # always save your weights after training or during training
+
+# at this point, the top layers are well trained and we can start fine-tuning
+# convolutional layers from inception V3. We will freeze the bottom N layers
+# and train the remaining top layers.
+
+# let's visualize layer names and layer indices to see how many layers
+# we should freeze:
+for i, layer in enumerate(base_model.layers):
+    print(i, layer.name)
+
+# we chose to train the top 2 inception blocks, i.e. we will freeze
+# the first 249 layers and unfreeze the rest:
+for layer in model.layers[:249]:
+    layer.trainable = False
+for layer in model.layers[249:]:
+    layer.trainable = True
+
+for layer in model.layers:
+    print layer.trainable
+
+# we need to recompile the model for these modifications to take effect
+# we use SGD with a low learning rate
+model.compile(
+    optimizer=SGD(lr=0.0001, momentum=0.9), loss='binary_crossentropy')
+
+# we train our model again (this time fine-tuning the top 2 inception blocks
+# alongside the top Dense layers
+model.fit_generator(
+    train_generator,
+    steps_per_epoch=numTrainImgs,
+    epochs=50,
+    validation_data=validation_generator,
+    validation_steps=numValidationImgs // batch_size)
