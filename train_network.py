@@ -3,6 +3,12 @@ from keras.models import Model
 from keras.layers import Dense, GlobalAveragePooling2D
 from keras.optimizers import SGD
 from keras.preprocessing.image import ImageDataGenerator
+import sys
+import time
+
+def current_millis_time():
+    return int(round(time.time() * 1000))
+
 
 batch_size = 16
 numTrainImgs = 2000
@@ -21,7 +27,7 @@ test_datagen = ImageDataGenerator(rescale=1. / 255)
 # batches of augmented image data
 train_generator = train_datagen.flow_from_directory(
     'train_resized',  # this is the target directory
-    target_size=(299, 299),  # all images will be resized to 150x150
+    target_size=(299, 299),  # all images will be resized to 299x299
     batch_size=batch_size,
     class_mode='binary'
 )  # since we use binary_crossentropy loss, we need binary labels
@@ -41,7 +47,7 @@ x = base_model.output
 x = GlobalAveragePooling2D()(x)
 # let's add a fully-connected layer
 x = Dense(1024, activation='relu')(x)
-# and a logistic layer -- let's say we have 2 classes
+# and an output layer with one neuron which is binary
 predictions = Dense(1, activation='softmax')(x)
 
 # this is the model we will train
@@ -55,16 +61,18 @@ for layer in base_model.layers:
 # compile the model (should be done *after* setting layers to non-trainable)
 model.compile(optimizer='rmsprop', loss='binary_crossentropy')
 
-# train the model on the new data for a few epochs
-model.fit_generator(
-    train_generator,
-    steps_per_epoch=numTrainImgs // batch_size,
-    epochs=8,
-    validation_data=validation_generator,
-    validation_steps=numValidationImgs // batch_size)
-model.save_weights(
-    'trained_top_layers.h5'
-)  # always save your weights after training or during training
+if sys.argv[1] == "load":
+    model.load_weights(sys.argv[2])
+else:
+    # train the model on the new data for a few epochs
+    model.fit_generator(
+        train_generator,
+        steps_per_epoch=numTrainImgs // batch_size,
+        epochs=8,
+        validation_data=validation_generator,
+        validation_steps=numValidationImgs // batch_size)
+    model.save('saves/trained_top_layers'+str(current_millis_time)+'.h5')
+    model.save_weights('saves/trained_top_layers-weights'+str(current_millis_time)+'.h5')
 
 # at this point, the top layers are well trained and we can start fine-tuning
 # convolutional layers from inception V3. We will freeze the bottom N layers
@@ -82,9 +90,6 @@ for layer in model.layers[:249]:
 for layer in model.layers[249:]:
     layer.trainable = True
 
-for layer in model.layers:
-    print layer.trainable
-
 # we need to recompile the model for these modifications to take effect
 # we use SGD with a low learning rate
 model.compile(
@@ -98,3 +103,6 @@ model.fit_generator(
     epochs=50,
     validation_data=validation_generator,
     validation_steps=numValidationImgs // batch_size)
+
+model.save('saves/trained_final'+str(current_millis_time)+'.h5')
+model.save_weights('saves/trained_final-weights'+str(current_millis_time)+'.h5')
