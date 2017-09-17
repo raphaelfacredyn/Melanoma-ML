@@ -64,7 +64,7 @@ for layer in base_model.layers:
 model.compile(
     optimizer='rmsprop',
     loss='categorical_crossentropy',
-    metrics=['categorical_accuracy'])
+    metrics=['accuracy','categorical_accuracy'])
 
 if sys.argv[1] == "load":
     print "Loading model+ " + sys.argv[2]
@@ -98,7 +98,7 @@ for layer in model.layers[249:]:
 model.compile(
     optimizer=SGD(lr=0.0001, momentum=0.9),
     loss='categorical_crossentropy',
-    metrics=['categorical_accuracy'])
+    metrics=['accuracy','categorical_accuracy'])
 
 print "Starting Main Training"
 # we train our model again (this time fine-tuning the top 2 inception blocks
