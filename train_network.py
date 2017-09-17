@@ -59,7 +59,7 @@ model.compile(optimizer='rmsprop', loss='binary_crossentropy')
 model.fit_generator(
     train_generator,
     steps_per_epoch=numTrainImgs // batch_size,
-    epochs=50,
+    epochs=8,
     validation_data=validation_generator,
     validation_steps=numValidationImgs // batch_size)
 model.save_weights(
@@ -94,7 +94,7 @@ model.compile(
 # alongside the top Dense layers
 model.fit_generator(
     train_generator,
-    steps_per_epoch=numTrainImgs,
+    steps_per_epoch=(numTrainImgs // batch_size),
     epochs=50,
     validation_data=validation_generator,
     validation_steps=numValidationImgs // batch_size)
