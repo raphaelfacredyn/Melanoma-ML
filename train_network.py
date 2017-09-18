@@ -74,7 +74,7 @@ else:
     model.fit_generator(
         train_generator,
         steps_per_epoch=numTrainImgs // batch_size,
-        epochs=8,
+        epochs=2, # There is no improvement after 2 epochs
         validation_data=validation_generator,
         validation_steps=numValidationImgs // batch_size)
     plot_model(model, to_file='preview/model.png', show_shapes=True)
