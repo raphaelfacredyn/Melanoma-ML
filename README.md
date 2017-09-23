@@ -4,6 +4,7 @@
 * Create directories train_resized, test_resized, validation_resized
   * Inside each of these make the directories pos, neg
 * Complete folder structure:
+
       out/
 
       preview/
